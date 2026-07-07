@@ -1,0 +1,51 @@
+name: Release Disco Inferno
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to upload (e.g. 1.2.0)
+        required: true
+
+jobs:
+  package-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - name: Set version
+        run: echo "VERSION=${{ github.event.release.tag_name || inputs.version }}" >> "$GITHUB_ENV"
+
+      - name: Package (no git artefacts)
+        run: |
+          git archive --format=zip --prefix="Disco Inferno/" \
+            -o "Disco-Inferno-${VERSION}.zip" HEAD
+
+      - name: Verify zip contents
+        run: |
+          unzip -l "Disco-Inferno-${VERSION}.zip"
+          if unzip -l "Disco-Inferno-${VERSION}.zip" | grep -E '\.git|\.github'; then
+            echo "Git artefacts found in zip" && exit 1
+          fi
+          unzip -l "Disco-Inferno-${VERSION}.zip" | grep -q 'Disco Inferno/Disco Inferno.mod' \
+            || { echo "Missing Disco Inferno.mod" && exit 1; }
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Disco-Inferno-${{ env.VERSION }}
+          path: Disco-Inferno-${{ env.VERSION }}.zip
+
+      - name: Upload to Nexus Mods
+        if: ${{ !github.event.release.prerelease }}
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.8
+        with:
+          api_key: ${{ secrets.NEXUSMODS_APIKEY }}
+          file_id: ${{ vars.NEXUS_FILE_ID }}
+          filename: Disco-Inferno-${{ env.VERSION }}.zip
+          version: ${{ env.VERSION }}
+          display_name: Disco Inferno ${{ env.VERSION }}
+          category: main
+          description: ${{ github.event.release.body }}
