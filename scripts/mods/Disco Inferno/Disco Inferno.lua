@@ -1,12 +1,12 @@
 --[[
 	Name: Disco Inferno
 	Author: Wobin
-	Date: 27/06/2026
-	Version: 1.0.0
+	Date: 28/06/2026
+	Version: 1.1.0
 ]]--
 
 local mod = get_mod("Disco Inferno")
-mod.version = "1.0.0"
+mod.version = "1.1.0"
 
 local EyeLights = mod:io_dofile("Disco Inferno/scripts/mods/Disco Inferno/modules/eyelights")
 local Jukebox = mod:io_dofile("Disco Inferno/scripts/mods/Disco Inferno/modules/jukebox")
@@ -19,6 +19,7 @@ local ScriptUnit = ScriptUnit
 local Managers = Managers
 local GameSession = GameSession
 local pairs = pairs
+local math_floor = math.floor
 
 local unit_alive = Unit.alive
 local unit_world = Unit.world
@@ -82,18 +83,45 @@ local function resolve_song_settings(song_key)
 		}
 	end
 
+	local rainbow = DEFAULTS.rainbow
+
+	if s.rainbow ~= nil then
+		rainbow = s.rainbow
+	end
+
 	return {
 		volume = s.volume or DEFAULTS.volume,
 		bpm = s.bpm or DEFAULTS.bpm,
 		intensity = s.intensity or DEFAULTS.intensity,
-		rainbow = (s.rainbow ~= nil) and s.rainbow or DEFAULTS.rainbow,
+		rainbow = rainbow,
 		colour_one = to_rgb(s.colour_one, DEFAULTS.colour_one),
 		colour_two = to_rgb(s.colour_two, DEFAULTS.colour_two),
 	}
 end
 
 local function random_colour(rand)
-	return { rand:random_range(0, 1), rand:random_range(0, 1), rand:random_range(0, 1) }
+	local h = rand:random_range(0, 6)
+	local sector = math_floor(h)
+	local f = h - sector
+
+	if sector >= 6 then
+		sector = 5
+		f = 1
+	end
+
+	if sector == 0 then
+		return { 1, f, 0 }
+	elseif sector == 1 then
+		return { 1 - f, 1, 0 }
+	elseif sector == 2 then
+		return { 0, 1, f }
+	elseif sector == 3 then
+		return { 0, 1 - f, 1 }
+	elseif sector == 4 then
+		return { f, 0, 1 }
+	end
+
+	return { 1, 0, 1 - f }
 end
 
 local function skull_state(skull)
@@ -158,6 +186,7 @@ mod.on_game_state_changed = function(status, state_name)
 		ensure_package()
 
 		if mod.jukebox then
+			mod.jukebox:stop_sample()
 			mod.jukebox:rebuild_playlist()
 		end
 	elseif status == "exit" then
@@ -202,10 +231,7 @@ end
 local function start_party(skull)
 	ensure_package()
 
-	local seed = (mod._play_counter or 0) + 1
-	mod._play_counter = seed
-
-	local song_key = mod.jukebox and mod.jukebox:choose(seed)
+	local song_key = mod.jukebox and mod.jukebox:choose(mod._rand)
 	local o = resolve_song_settings(song_key)
 
 	local world = unit_world(skull)
@@ -296,8 +322,12 @@ mod.update = function(dt)
 			end
 		end
 
-		for _, party in pairs(mod.parties) do
-			party.opts = resolve_song_settings(party.song_key)
+		if mod._settings_dirty then
+			mod._settings_dirty = false
+
+			for _, party in pairs(mod.parties) do
+				party.opts = resolve_song_settings(party.song_key)
+			end
 		end
 	end
 
@@ -337,16 +367,26 @@ mod.teardown = function(self)
 	self.parties = {}
 
 	if self.jukebox then
-		self.jukebox:stop()
+		self.jukebox:stop_all()
 	end
 end
 
-mod.on_disabled = function()
+local function shutdown()
+	if mod.config then
+		pcall(function()
+			mod.config:close()
+		end)
+	end
+
 	mod:teardown()
 end
 
+mod.on_disabled = function()
+	shutdown()
+end
+
 mod.on_unload = function()
-	mod:teardown()
+	shutdown()
 end
 
 mod:command("di", mod:localize("di_open_setup"), function()

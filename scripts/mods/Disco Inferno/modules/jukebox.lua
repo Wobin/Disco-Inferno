@@ -2,7 +2,9 @@ local mod = get_mod("Disco Inferno")
 
 local ipairs = ipairs
 local pcall = pcall
+local math_floor = math.floor
 local string_match = string.match
+local table_remove = table.remove
 local unit_alive = Unit.alive
 
 local function log(fmt, ...)
@@ -25,8 +27,11 @@ DiscoInfernoJukebox.init = function(self, simple_audio)
 	self.simple_audio = simple_audio
 	self.tracks = {}
 	self.path_lookup = {}
+	self.bag = {}
 	self.play_id = nil
+	self.sample_id = nil
 	self.token = 0
+	self.sample_token = 0
 
 	self:rebuild_playlist()
 end
@@ -36,6 +41,7 @@ DiscoInfernoJukebox.rebuild_playlist = function(self)
 
 	self.tracks = {}
 	self.path_lookup = {}
+	self.bag = {}
 
 	if not sa then
 		return
@@ -72,14 +78,37 @@ DiscoInfernoJukebox.has_tracks = function(self)
 	return #self.tracks > 0
 end
 
-DiscoInfernoJukebox.choose = function(self, seed)
-	if #self.tracks == 0 then
+DiscoInfernoJukebox.choose = function(self, rand)
+	local count = #self.tracks
+
+	if count == 0 then
 		return nil
 	end
 
-	local index = (seed % #self.tracks) + 1
+	if #self.bag == 0 then
+		for i = 1, count do
+			self.bag[i] = self.tracks[i].file_path
+		end
+	end
 
-	return self.tracks[index].file_path
+	local n = #self.bag
+	local index = 1
+
+	if rand and n > 1 then
+		index = math_floor(rand:random_range(1, n + 1))
+
+		if index < 1 then
+			index = 1
+		elseif index > n then
+			index = n
+		end
+	end
+
+	local key = table_remove(self.bag, index)
+
+	log("jukebox: chose '%s' (%d left in bag)", tostring(key), #self.bag)
+
+	return key
 end
 
 DiscoInfernoJukebox.play = function(self, skull_unit, song_key, volume)
@@ -110,7 +139,7 @@ DiscoInfernoJukebox.play = function(self, skull_unit, song_key, volume)
 	local since_update = 0
 
 	local ok, id = pcall(sa.play_file, path, {
-		audio_type = "music",
+		audio_type = "sfx",
 		volume = volume or 100,
 		on_update = set_position and function(pid, dt)
 			since_update = since_update + dt
@@ -156,26 +185,41 @@ DiscoInfernoJukebox.play_sample = function(self, song_key, volume)
 		return
 	end
 
+	self:stop_sample()
+
+	self.sample_token = self.sample_token + 1
+
+	local token = self.sample_token
+
 	local ok, id = pcall(sa.play_file, path, {
-		audio_type = "music",
+		audio_type = "sfx",
 		volume = volume or 100,
 		on_finished = function()
-			mod.playingSample = nil
+			if self.sample_token == token then
+				self.sample_id = nil
+			end
 		end,
 	})
 
+	if ok then
+		self.sample_id = id
+	end
+
 	log("jukebox: play_sample '%s' ok=%s id=%s", tostring(path), tostring(ok), tostring(id))
 
-	if ok then
-		return id
-	end
+	return id
 end
 
-DiscoInfernoJukebox.stop_sample = function(self, id)
+DiscoInfernoJukebox.is_sample_playing = function(self)
+	return self.sample_id ~= nil
+end
+
+DiscoInfernoJukebox.stop_sample = function(self)
 	local sa = self.simple_audio
 
-	if sa and id then
-		pcall(sa.stop_file, id)
+	if sa and self.sample_id then
+		pcall(sa.stop_file, self.sample_id)
+		self.sample_id = nil
 	end
 end
 
@@ -186,6 +230,11 @@ DiscoInfernoJukebox.stop = function(self)
 		pcall(sa.stop_file, self.play_id)
 		self.play_id = nil
 	end
+end
+
+DiscoInfernoJukebox.stop_all = function(self)
+	self:stop()
+	self:stop_sample()
 end
 
 return DiscoInfernoJukebox

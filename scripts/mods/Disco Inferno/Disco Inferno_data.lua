@@ -9,6 +9,7 @@ return {
 			{
 				setting_id = "di_show_config",
 				type = "checkbox",
+				tooltip = "di_show_config_desc",
 				default_value = false,
 			},
 			{

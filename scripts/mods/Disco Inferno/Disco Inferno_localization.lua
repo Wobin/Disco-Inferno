@@ -3,7 +3,7 @@ return {
 		en = "Disco Inferno",
 	},
 	mod_description = {
-		en = "When the Skitarii Purgator's servo skull goes empowered, it blasts heavy metal and fires two strobing red spotlights from its eyes. Requires SimpleAudio. Drop your own tracks in the mod's audio folder.",
+		en = "When the Skitarii Purgator's servo skull unleashes its flamethrower, it blasts heavy metal and fires two strobing spotlights from its eyes. Colour, brightness and strobe tempo are configurable per track. Requires SimpleAudio. Drop your own tracks in the mod's audio folder.",
 	},
 	di_debug = {
 		en = "Debug logging (mod log + chat)",

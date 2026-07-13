@@ -10,6 +10,7 @@ local window_width = math.min(WIDTH * ui_scale, RESOLUTION_LOOKUP.width - OFFSET
 local window_height = math.min(HEIGHT * ui_scale, RESOLUTION_LOOKUP.height - OFFSET)
 local padded_width = window_width - PADDING
 
+local ipairs = ipairs
 local Imgui = Imgui
 local Imgui_checkbox = Imgui.checkbox
 local Imgui_is_item_hovered = Imgui.is_item_hovered
@@ -44,13 +45,15 @@ local DiscoInfernoConfig = class("DiscoInfernoConfig")
 
 function DiscoInfernoConfig:init()
 	self._is_open = false
+	self._working = nil
+	self._working_key = nil
 end
 
 function DiscoInfernoConfig:open()
 	local input_manager = Managers.input
 	local name = self.__class_name
 
-	if not input_manager:cursor_active() then
+	if input_manager and not input_manager:cursor_active() then
 		input_manager:push_cursor(name)
 		self.pushedcursor = true
 	end
@@ -61,19 +64,40 @@ end
 
 function DiscoInfernoConfig:close()
 	if mod:get("di_show_config") then
-		mod:set("di_show_config", false)
+		mod:set("di_show_config", false, false)
+	end
+
+	if mod.jukebox then
+		mod.jukebox:stop_sample()
 	end
 
 	local input_manager = Managers.input
-	local name = self.__class_name
 
-	if self.pushedcursor then
-		input_manager:pop_cursor(name)
+	if self.pushedcursor and input_manager then
+		input_manager:pop_cursor(self.__class_name)
 		self.pushedcursor = false
 	end
 
 	self._is_open = false
 	Imgui.close_imgui()
+end
+
+function DiscoInfernoConfig:working_settings(all_settings, key)
+	local existing = all_settings[key]
+
+	if existing then
+		self._working_key = key
+		self._working = existing
+
+		return existing
+	end
+
+	if self._working_key ~= key or not self._working then
+		self._working_key = key
+		self._working = default_song_settings()
+	end
+
+	return self._working
 end
 
 function DiscoInfernoConfig:update()
@@ -82,10 +106,12 @@ function DiscoInfernoConfig:update()
 	end
 
 	Imgui_set_next_window_size(window_width, window_height)
+
 	if first_run then
 		Imgui_set_next_window_pos((RESOLUTION_LOOKUP.width / 2) - (WIDTH / 2) - 100, (RESOLUTION_LOOKUP.height / 2) - (HEIGHT / 2) - 20)
 		first_run = false
 	end
+
 	local _, closed = Imgui_begin_window(mod:localize("di_config_title"), "always_auto_resize")
 
 	if closed then
@@ -96,39 +122,37 @@ function DiscoInfernoConfig:update()
 
 	local jukebox = mod.jukebox
 	local songList = jukebox and jukebox:get_music()
+
 	if not jukebox or not songList or #songList == 0 then
 		Imgui_text(mod:localize("di_no_songs"))
 		Imgui_end_window()
+
 		return
 	end
 
 	local all_settings = mod:get("di_song_settings") or {}
 
-	local saveSettings = function(song_settings)
+	local function saveSettings(song_settings)
 		all_settings[mod.selectedSong] = song_settings
 		mod:set("di_song_settings", all_settings, false)
-	end
-
-	local song_settings = {}
-
-	if mod.selectedSong then
-		song_settings = all_settings[mod.selectedSong] or default_song_settings()
+		mod._settings_dirty = true
 	end
 
 	if Imgui_begin_combo(mod:localize("di_song_current"), mod.selectedSong or "") then
 		Imgui_selectable(mod:localize("di_song_select"), not mod.selectedSong)
-		for i, v in ipairs(songList) do
+
+		for _, v in ipairs(songList) do
 			if Imgui_selectable(v.file_path, mod.selectedSong == v.file_path) then
-				if mod.selectedSong ~= v.file_path then
-					mod.selectedSong = v.file_path
-					song_settings = all_settings[mod.selectedSong] or default_song_settings()
-				end
+				mod.selectedSong = v.file_path
 			end
 		end
+
 		Imgui_end_combo()
 	end
 
 	if mod.selectedSong then
+		local song_settings = self:working_settings(all_settings, mod.selectedSong)
+
 		local newVolume = Imgui_slider_int(mod:localize("di_song_volume"), song_settings.volume or 80, 0, 200)
 		if newVolume ~= song_settings.volume then
 			song_settings.volume = newVolume
@@ -136,15 +160,18 @@ function DiscoInfernoConfig:update()
 		end
 
 		Imgui_same_line()
-		local button_text = mod.playingSample and "||" or ">"
+
+		local playing = jukebox:is_sample_playing()
+		local button_text = playing and "||" or ">"
+
 		if Imgui_button(button_text) then
-			if mod.playingSample then
-				jukebox:stop_sample(mod.playingSample)
-				mod.playingSample = nil
+			if playing then
+				jukebox:stop_sample()
 			else
-				mod.playingSample = jukebox:play_sample(mod.selectedSong, song_settings.volume)
+				jukebox:play_sample(mod.selectedSong, song_settings.volume)
 			end
 		end
+
 		if Imgui_is_item_hovered() then
 			Imgui_begin_tool_tip()
 			Imgui_text(mod:localize("di_preview"))
