@@ -8,6 +8,11 @@ return {
 			mod_localization = "Disco Inferno/scripts/mods/Disco Inferno/Disco Inferno_localization",
 		})
 	end,
-	version = "1.1.0",
 	packages = {},
+	load_after = {
+		"SimpleAudio",
+	},
+	require = {
+		"SimpleAudio",
+	},
 }

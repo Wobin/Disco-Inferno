@@ -1,12 +1,11 @@
 --[[
 	Name: Disco Inferno
 	Author: Wobin
-	Date: 28/06/2026
-	Version: 1.1.0
+	Date: 20/08/2026
 ]]--
 
 local mod = get_mod("Disco Inferno")
-mod.version = "1.1.0"
+mod.version = mod.get_metadata and mod:get_metadata("version") or "unknown"
 
 local EyeLights = mod:io_dofile("Disco Inferno/scripts/mods/Disco Inferno/modules/eyelights")
 local Jukebox = mod:io_dofile("Disco Inferno/scripts/mods/Disco Inferno/modules/jukebox")
@@ -69,33 +68,38 @@ local function to_rgb(c, fallback)
 end
 
 local function resolve_song_settings(song_key)
+	local global_rainbow = mod:get("di_global_rainbow") and true or false
+	local global_volume = mod:get("di_global_volume") or 100
+
 	local all = mod:get("di_song_settings")
 	local s = song_key and all and all[song_key]
 
-	if not s then
-		return {
-			volume = DEFAULTS.volume,
-			bpm = DEFAULTS.bpm,
-			intensity = DEFAULTS.intensity,
-			rainbow = DEFAULTS.rainbow,
-			colour_one = to_rgb(DEFAULTS.colour_one),
-			colour_two = to_rgb(DEFAULTS.colour_two),
-		}
-	end
-
+	local volume = DEFAULTS.volume
+	local bpm = DEFAULTS.bpm
+	local intensity = DEFAULTS.intensity
 	local rainbow = DEFAULTS.rainbow
+	local colour_one = DEFAULTS.colour_one
+	local colour_two = DEFAULTS.colour_two
 
-	if s.rainbow ~= nil then
-		rainbow = s.rainbow
+	if s then
+		volume = s.volume or DEFAULTS.volume
+		bpm = s.bpm or DEFAULTS.bpm
+		intensity = s.intensity or DEFAULTS.intensity
+		colour_one = s.colour_one or DEFAULTS.colour_one
+		colour_two = s.colour_two or DEFAULTS.colour_two
+
+		if s.rainbow ~= nil then
+			rainbow = s.rainbow
+		end
 	end
 
 	return {
-		volume = s.volume or DEFAULTS.volume,
-		bpm = s.bpm or DEFAULTS.bpm,
-		intensity = s.intensity or DEFAULTS.intensity,
-		rainbow = rainbow,
-		colour_one = to_rgb(s.colour_one, DEFAULTS.colour_one),
-		colour_two = to_rgb(s.colour_two, DEFAULTS.colour_two),
+		volume = volume * global_volume / 100,
+		bpm = bpm,
+		intensity = intensity,
+		rainbow = global_rainbow or rainbow,
+		colour_one = to_rgb(colour_one, DEFAULTS.colour_one),
+		colour_two = to_rgb(colour_two, DEFAULTS.colour_two),
 	}
 end
 
@@ -147,20 +151,54 @@ mod.on_all_mods_loaded = function()
 	mod.jukebox = Jukebox:new(mod.simple_audio)
 	mod._rand = PortableRandom:new(1337)
 
-	local SettingsUI = mod:io_dofile("Disco Inferno/scripts/mods/Disco Inferno/modules/SettingsUI")
-	mod.config = SettingsUI:new()
-
 	mod:info("Disco Inferno " .. tostring(mod.version) .. " loaded")
+
+	if mod.track_options then
+		mod.track_options.sync()
+	end
 end
 
 mod.on_setting_changed = function(setting_id)
-	if setting_id == "di_show_config" and mod.config then
-		if mod:get("di_show_config") then
-			mod.config:open()
-		else
-			mod.config:close()
-		end
+	if setting_id == "di_track_selector" then
+		return
 	end
+
+	if mod.track_options then
+		mod.track_options.sync()
+	end
+
+	mod._settings_dirty = true
+end
+
+mod.on_settings_reset = function()
+	if mod.track_options then
+		mod.track_options.sync()
+	end
+
+	mod._settings_dirty = true
+end
+
+mod.preview_selected_track = function()
+	local TrackOptions = mod.track_options
+
+	if not TrackOptions or not mod.jukebox then
+		return
+	end
+
+	if mod.preview_id then
+		mod.jukebox:stop_playing(mod.preview_id)
+		mod.preview_id = nil
+
+		return
+	end
+
+	local track = TrackOptions.selected_track()
+
+	if not track then
+		return
+	end
+
+	mod.preview_id = mod.jukebox:play_sample(track.name, mod:get(track.id .. "_volume") or 80)
 end
 
 local function ensure_package()
@@ -285,10 +323,6 @@ mod.update = function(dt)
 		return
 	end
 
-	if mod.config then
-		mod.config:update()
-	end
-
 	_poll_timer = _poll_timer + dt
 
 	if _poll_timer >= POLL_INTERVAL then
@@ -372,12 +406,6 @@ mod.teardown = function(self)
 end
 
 local function shutdown()
-	if mod.config then
-		pcall(function()
-			mod.config:close()
-		end)
-	end
-
 	mod:teardown()
 end
 
@@ -390,7 +418,7 @@ mod.on_unload = function()
 end
 
 mod:command("di", mod:localize("di_open_setup"), function()
-	mod:set("di_show_config", not mod:get("di_show_config"))
+	Managers.ui:open_view("dmf_options_view", nil, nil, nil, nil, { can_exit = true })
 end)
 
 mod:command("di_test", mod:localize("di_test_desc"), function(arg)

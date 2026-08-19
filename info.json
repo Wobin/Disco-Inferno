@@ -1,0 +1,21 @@
+{
+	"name": "Disco Inferno",
+	"description": "When the Skitarii Purgator's servo skull unleashes its flamethrower, it blasts heavy metal and fires two strobing spotlights from its eyes. Colour, brightness and strobe tempo are configurable per track. Requires SimpleAudio. Drop your own tracks in the mod's audio folder.",
+	"version": "1.2.1",
+	"author": "Wobin",
+	"homepage": "https://www.nexusmods.com/warhammer40kdarktide/mods/1021",
+	"source": "https://github.com/Wobin/Disco-Inferno",
+	"funding": {
+		"kofi": "https://ko-fi.com/wobin_dwonderdog"
+	},
+	"nexusId": "1021",
+	"order": {
+		"require": [
+			"SimpleAudio"
+		],
+		"this_after": [
+			"SimpleAudio"
+		],
+		"this_before": []
+	}
+}

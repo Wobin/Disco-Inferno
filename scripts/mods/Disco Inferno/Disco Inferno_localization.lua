@@ -1,4 +1,9 @@
 return {
+	di_select_song = { en = "Select a track..." },
+	di_lights_rainbow = { en = "Random rainbow" },
+	di_lights_fixed = { en = "Fixed colours" },
+	di_preview_track = { en = "Preview" },
+	di_preview_track_button = { en = "Play / stop sample" },
 	mod_name = {
 		en = "Disco Inferno",
 	},
@@ -13,6 +18,18 @@ return {
 	},
 	di_show_config_desc = {
 		en = "Opens the Disco Inferno per-song settings window. Closes it again when unticked.",
+	},
+	di_global_rainbow = {
+		en = "Global rainbow mode",
+	},
+	di_global_rainbow_desc = {
+		en = "Forces rainbow (random colour) lights on every track, overriding each track's colour choice.",
+	},
+	di_global_volume = {
+		en = "Global volume",
+	},
+	di_global_volume_desc = {
+		en = "Master volume applied on top of each track's own volume (100 = unchanged). Takes effect on the next flame.",
 	},
 	di_config_title = {
 		en = "Disco Inferno Config",
